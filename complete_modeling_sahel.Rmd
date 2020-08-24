@@ -725,3 +725,412 @@ xlab="longitude",ylab="latitude"), yrange = c(5,27))
 
 
 
+
+
+
+
+
+## Modeling Stunting
+
+#Linear regression
+
+We are going to star by using a simple model. There we are going to plot the residuals in the raster to see if they seem to be distributed as random.
+
+
+```{r}
+
+model.lineal = lm(Stunted ~  Year + Area + Bmss_nm, data = data_stunted)
+summary(model.lineal)
+
+```
+
+```{r}
+
+plot(model.lineal)
+
+```
+
+```{r}
+
+model.lineal.2 = lm(log(Stunted) ~  Year + Area + Bmss_nm, data = data_stunted)
+summary(model.lineal.2)
+
+```
+
+```{r}
+
+plot(model.lineal.2)
+
+```
+
+
+```{r}
+
+model.lineal.3 = lm(sqrt(Stunted) ~  Year + Area + Bmss_nm, data = data_stunted)
+summary(model.lineal.3)
+
+```
+
+```{r}
+
+plot(model.lineal.3)
+
+```
+
+No parecen tener mucho efecto las transformaciones.
+
+```{r}
+
+data_stunted$residuals = residuals(model.lineal)
+
+x <- aggregate(data_stunted, 
+               by = list(data_stunted$admn0Nm,data_stunted$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data =x, aes(fill = x$residuals), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    labs(fill = 'Estimated residuals') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+
+
+
+```
+
+Residuals per year
+
+```{r}
+
+for(i in 1998:2018){
+  
+  ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data =data_wasted[data_wasted$Year == i,], aes(fill = data_wasted[data_wasted$Year == i,]$residuals), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'Year ' + i + ', by region') + 
+    labs(fill = 'Wasting rate') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+}
+
+
+
+
+```
+
+# Mixed models
+
+How to choose random effects and fixed effects?
+
+We start by testing random effects, then, the fixed effects.
+
+
+```{r}
+
+#Random intercept with fixed mean
+model.mixed.1 =lmer(Stunted ~ Year + Area + Bmss_nm + (1|admn0Nm) + (1|admn1Nm), data = data_stunted, REML = FALSE)
+#Intercept varying among group 1 and group 2 within group 1
+model.mixed.2 = lmer(Stunted ~ Year + Area + Bmss_nm + (1|admn0Nm/admn0Nm), data = data_stunted, REML = FALSE)
+summary(model.mixed.1)
+summary(model.mixed.1)
+
+
+```
+
+```{r}
+
+anova(model.mixed.1,model.mixed.2)
+
+```
+
+As we can see, independent intercepts for each country and region seem to perform better than nested as shown by ANOVA.
+
+```{r}
+#Uncorrelated slope and intercept for the year and intercept varying among g1 and g2 withing g1.
+model.mixed.3 = lmer(Stunted ~ Year + Area + Bmss_nm + (Year  | admn0Nm) + (Year  | admn1Nm), data = data_stunted, REML = FALSE, na.action = na.omit)
+summary(model.mixed.3)
+anova(model.mixed.1,model.mixed.3)
+
+```
+
+Doesnt seem to improve the fit
+
+```{r}
+
+#Uncorrelated slope and intercept for the year and intercept varying among g1 and g2 withing g1.
+model.mixed.4 = update(model.mixed.1, .~.+Year:Bmss_nm+Area:Bmss_nm)
+model.mixed.5 = update(model.mixed.2, .~.+Year:Bmss_nm+Area:Bmss_nm)
+
+anova(model.mixed.4,model.mixed.5)
+```
+
+```{r}
+
+anova(model.mixed.4,model.mixed.1)
+
+```
+
+As we can see, the best model seem to be the model number 1, using intercepts varying among admn0Nm and admn1Nm (independent intercepts).
+
+We inspect model 1 now:
+
+```{r}
+
+model.mixed.1 = update(model.mixed.1, REML = TRUE)
+
+data_stunted$residuals = residuals(model.mixed.1)
+
+x <- aggregate(data_stunted, 
+               by = list(data_stunted$admn0Nm,data_stunted$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data =x, aes(fill = x$residuals), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    labs(fill = 'Estimated residuals') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+
+
+
+```
+
+Residuals per year
+
+```{r}
+
+for(i in 1998:2018){
+  
+  ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data =data_wasted[data_wasted$Year == i,], aes(fill = data_wasted[data_wasted$Year == i,]$residuals), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'Year ' + i + ', by region') + 
+    labs(fill = 'Estimated residuals') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+}
+
+
+```
+
+Diagnostic plots to see if the assumptions of the regression are being held.
+
+
+```{r}
+
+plot(model.mixed.1, form = resid(.) ~ Year | admn1Nm)
+
+```
+
+
+```{r}
+
+plot(model.mixed.1)
+par(mfrow=c(1,2))
+plot(model.mixed.1)
+qqnorm(resid(model.mixed.1))
+qqline(resid(model.mixed.1))
+
+
+```
+Variance does not seem to be constant:
+
+
+```{r}
+
+plot(model.mixed.1 , Stunted ~ fitted(.) , abline = c(0,1))
+plot(model.mixed.1 , Stunted ~ fitted(.) | admn0Nm, abline = c(0,1))
+plot(model.mixed.1 , Stunted ~ fitted(.) | admn1Nm, abline = c(0,1))
+
+```
+
+There seems to be spatial autocorrelation, we test that with Moran's I
+
+```{r}
+
+nb <- poly2nb(data_stunted)
+lw <- nb2listw(nb)
+
+moran.test(data_stunted$Stunted, lw, randomisation = TRUE)
+moran.mc(data_stunted$Stunted, lw, nsim = 10000)
+```
+
+The p-value lead us to reject the null hypothesis, as a result, there is strong evidence that the data is not independently normally distributed and I > 0 indicating spatial correlation. As a result, we fit the spatial model.
+
+
+First the model without spatial components:
+
+```{r}
+
+model.spam = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) ,data=data_stunted, method = 'ML')
+
+summary(model.spam)
+
+```
+
+
+```{r}
+
+#data = data[data$Year == 2018,]
+
+options(warn=-1)
+
+
+#unique_data = data[unique(data$admn1Nm),]
+
+centroids <- st_transform(data_stunted$geometry, 29101) %>% 
+  st_centroid() %>% 
+  # this is the crs from d, which has no EPSG code:
+  st_transform(., '+proj=longlat +ellps=GRS80 +no_defs') %>%
+  # since you want the centroids in a second geometry col:
+  st_geometry()
+
+# check with
+plot(st_geometry(centroids))
+plot(centroids[, 'centroids'], add = T, col = 'red', pch = 19)
+
+coordinates = st_coordinates(centroids)
+
+data_stunted$lat = coordinates[,1]
+data_stunted$lon = coordinates[,2]
+
+proj4string <- "+proj=utm +zone=19 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs "
+pj <- project(centroids, proj4string, inverse=TRUE)
+
+library(surveillance)
+adj = (poly2adjmat(data_stunted))
+
+MLdistMat <- as.matrix(proxy::dist(centroids))
+
+```
+
+```{r}
+data_stunted.2 = data_stunted
+data_stunted.2$geometry = NULL
+model.spam.2 = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
+summary(model.spam.2)
+```
+
+
+```{r}
+
+model.spam.2 = update(model.spam.2, method = 'REML')
+
+data_stunted$residuals = residuals(model.spam.2)
+
+x <- aggregate(data_stunted, 
+               by = list(data_stunted$admn0Nm,data_stunted$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data =x, aes(fill = x$residuals), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    labs(fill = 'Estimated residuals') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+
+
+
+```
+
+```{r}
+
+plot(model.spam.2, form = resid(.) ~ Year | admn1Nm)
+
+```
+
+
+```{r}
+
+plot(model.spam.2)
+par(mfrow=c(1,2))
+plot(model.spam.2)
+qqnorm(resid(model.spam.2))
+qqline(resid(model.spam.2))
+
+
+```
+Variance does not seem to be constant:
+
+
+```{r}
+
+plot(model.spam.2$eta, data_stunted$Stunted)
+abline(a = 0,b = 1)
+
+```
+
+```{r}
+
+if (suppressPackageStartupMessages(require(maps,quietly=TRUE))) {
+## 'maps' required for add.map=TRUE
+filled.mapMM(model.spam.2,add.map=TRUE,plot.axes=quote({axis(1);axis(2)}),
+decorations=quote(points(pred[,coordinates],pch=15,cex=0.3)),
+plot.title=title(main="Inferred prevalence of chronic malnutrition, Sahel",
+xlab="longitude",ylab="latitude"), yrange = c(5,27))
+}
+
+
+```
+
+
+
+
+
