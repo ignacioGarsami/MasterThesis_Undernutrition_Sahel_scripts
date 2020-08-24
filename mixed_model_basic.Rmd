@@ -1,0 +1,638 @@
+---
+title: "Code testing"
+author: "Ignacio García Sánchez-Migallón"
+date: "08/06/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('SASmixed')
+library(nlme)
+library(lme4)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+rm(list=ls())
+
+```
+
+## Introduction
+
+Perform an exploratory analysis of the data.
+All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
+
+```{r}
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+data = read.csv('Mixed_model_data/base_data.csv')
+data$X = NULL
+
+
+#data$Biomass_anomaly = bestNormalize(data$Biomass_anomaly)$x.t
+
+#data$Biomass_anomaly = scale(data$Biomass_anomaly)
+data$Biomass_anomaly = (data$Biomass_anomaly)/1000
+data$Area = (data$Area)
+
+summary(data)
+
+```
+
+Theres few missing values for all explanatory variables, response ones have way too many. But thats what we have to deal with.
+
+```{r}
+
+ggplot(data) + aes(x = Year, y = Biomass, col = admin0Name) + geom_point() + theme_classic()
+
+```
+
+```{r}
+
+ggplot(data) + aes( y = (Biomass), col = admin0Name) + geom_boxplot() + theme_classic()
+
+```
+
+```{r}
+
+ggplot(data) + aes(x = Area, y = Biomass,col = admin0Name,  fill = admin0Name) + geom_col(size = 1) + theme_classic()
+
+```
+
+```{r}
+
+
+grid_arrange_shared_legend <- function(...) {
+  plots <- list(...)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position="bottom"))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  grid.arrange(
+    do.call(arrangeGrob, lapply(plots, function(x)
+      x + theme(legend.position="none"))),
+    legend,
+    ncol = 1,
+    heights = unit.c(unit(1, "npc") - lheight, lheight))
+}
+
+
+
+plot_mort = ggplot(na.omit(data)) + aes(x = admin0Name, y = Mortality, col = admin0Name) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
+plot_wasted = ggplot(na.omit(data)) + aes(x = admin0Name, y = Wasted, col = admin0Name) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
+plot_stunted = ggplot(na.omit(data)) + aes(x = admin0Name, y = Stunted, col = admin0Name) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
+
+
+grid_arrange_shared_legend(plot_mort,plot_wasted,plot_stunted, ncol=2, top = textGrob("Mortality, Stunted and Wasted rates per country",gp=gpar(fontsize=20)))
+```
+
+
+```{r}
+
+plot_mort = ggplot(na.omit(data)) + aes(x = Year, y = Mortality, col = admin0Name)+ geom_point(size = 0.5) + geom_quantile(size = 1.5, quantiles = 0.5) + theme_classic()
+plot_wasted = ggplot(na.omit(data)) + aes(x = Year, y = Wasted, col = admin0Name)+ geom_point(size = 0.5) + geom_quantile(size = 1.5, quantiles = 0.5) + theme_classic()
+plot_stunted = ggplot(na.omit(data)) + aes(x = Year, y = Stunted, col = admin0Name)+ geom_point(size = 0.5) + geom_quantile(size = 1.5, quantiles = 0.5) + theme_classic()
+
+grid_arrange_shared_legend(plot_mort,plot_wasted,plot_stunted, nrow=2, top = textGrob("Mortality, Stunted and Wasted rates per country",gp=gpar(fontsize=20)))
+
+```
+
+```{r}
+#Corrplot
+library(corrplot)
+cor1 = cor(na.omit(data[,3:10]))
+corrplot.mixed(cor1, lower.col = 'black', number.cex = .7)
+
+```
+
+In the corrplot it is easy to notice how the admins have dissapeared, as they are not numerical they cannot be shown in this plot.
+
+
+## Modeling Wastedness
+
+Justification about fixed effects and random effects.
+
+```{r}
+
+model.1 = lme(Wasted ~ Year  + Area + Biomass_anomaly , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+
+
+```
+
+```{r}
+
+fixef(model.1)
+
+```
+
+```{r}
+
+model.0 = lm(Wasted ~ Year + Mean + Biomass_anomaly + Area, data = data, na.action = na.omit)
+test=-2*logLik(model.0) +2*logLik(model.1)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+```
+
+This shows that the random effect is necessary.
+
+```{r}
+
+model.2 = lme(Wasted ~ Year + Area + Biomass_anomaly, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+
+
+
+
+```
+
+```{r}
+
+fixef(model.2)
+
+```
+
+
+```{r}
+
+model.3 = lme(Wasted ~ Year + Area + Biomass_anomaly, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+summary(model.3, corr = FALSE)
+
+
+```
+
+
+```{r}
+
+fixef(model.3)
+
+```
+
+
+```{r}
+
+model.4 = update(model.2, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+model.5 = update(model.3, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+
+
+```
+
+```{r}
+
+anova(model.4,model.5)
+
+```
+
+```{r}
+#Now model 4 versus model 1.
+model.1b = update(model.1, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+test=-2*logLik(model.1b) +2*logLik(model.4)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+model.4 = update(model.4, method = 'ML')
+model.2 = update(model.2, method = 'ML')
+anova(model.2,model.4)
+
+```
+
+```{r}
+#Model final?
+model.4 = update(model.4, method = 'REML')
+summary(model.4)
+```
+
+```{r}
+
+model.4 = update(model.4, .~.-Year:Biomass_anomaly, method = 'REML')
+summary(model.4)
+
+```
+
+```{r}
+
+fixef(model.4)
+
+```
+
+```{r}
+
+plot(model.4 , Wasted ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.4 , Wasted ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+```{r}
+#This panel is for testing exclusively.
+
+# Third possibility
+plot(model.4 , Wasted ~ Year | admin1Name, abline = c(0,1), ylim = c(0,50)) 
+plot(model.4 , fitted(.) ~ Year | admin1Name, abline = c(0,1), ylim = c(0,50))
+
+```
+
+
+```{r}
+
+plot(model.4)
+
+```
+Not constant?
+
+```{r}
+
+model.4b=update(model.4,weights=varPower(form=~fitted(.)))
+
+plot(model.4b)
+
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+plot(model.4b)
+qqnorm(resid(model.4b))
+qqline(resid(model.4b))
+shapiro.test(resid(model.4b))
+
+
+```
+
+We can see that the residuals are not normal. This might be solved by transforming the response variable Wasted. Let's try with a log transformation.
+
+```{r}
+library(boxcoxmix)
+library(bestNormalize)
+
+
+data_alt = data
+#data_alt$Wasted = bestNormalize(data$Wasted)$x.t
+
+model.wasting = lme(Wasted ~ Year + Area +  Biomass_anomaly + Area:Biomass_anomaly, random = list(admin1Name = pdDiag(~admin0Name)), data = data_alt,na.action = na.omit )
+
+
+```
+
+```{r}
+
+summary(model.wasting)
+plot(model.wasting)
+qqnorm(resid(model.wasting))
+qqline(resid(model.wasting))
+shapiro.test(resid(model.wasting))
+
+
+```
+
+```{r}
+
+plot(model.wasting , Wasted ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.wasting , Wasted ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+
+```{r}
+
+plot(ranef(model.4b))
+
+```
+
+
+## Modeling Stuntedness
+
+Justification about fixed effects and random effects.
+
+```{r}
+
+model.1 = lme(Stunted ~ Year + Biomass_anomaly + Area, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+
+
+```
+
+```{r}
+
+fixef(model.1)
+
+```
+
+```{r}
+
+model.0 = lm(Stunted ~ Year + Mean + Biomass + Area, data = data, na.action = na.omit)
+test=-2*logLik(model.0) +2*logLik(model.1)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+```
+
+This shows that the random effect is necessary.
+
+```{r}
+
+model.2 = lme(Stunted ~ Year  + Biomass_anomaly + Area, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+
+
+
+
+```
+
+```{r}
+
+fixef(model.2)
+
+```
+
+
+```{r}
+
+model.3 = lme(Stunted ~ Year + Biomass_anomaly + Area, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+summary(model.3, corr = FALSE)
+
+
+```
+
+
+```{r}
+
+fixef(model.3)
+
+```
+
+
+```{r}
+
+model.4 = update(model.2, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+model.5 = update(model.3, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+
+
+```
+
+```{r}
+
+anova(model.4,model.5)
+
+```
+
+```{r}
+#Now model 5 versus model 1.
+model.1b = update(model.1, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+test=-2*logLik(model.1b) +2*logLik(model.5)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+model.5 = update(model.5, method = 'ML')
+model.3 = update(model.3, method = 'ML')
+anova(model.3,model.5)
+
+```
+
+```{r}
+#Model final?
+model.3 = update(model.3, method = 'REML')
+summary(model.3)
+```
+
+```{r}
+model.3 = update(model.3,.~.-Biomass_anomaly, method = 'REML')
+summary(model.3)
+fixef(model.3)
+
+```
+
+```{r}
+
+plot(model.3 , Stunted ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.3 , Stunted ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+```{r}
+
+plot(model.3)
+
+```
+Not constant?
+
+```{r}
+
+model.3b=update(model.3,weights=varPower(form=~fitted(.)))
+
+plot(model.3)
+
+```
+
+
+```{r}
+
+qqnorm(resid(model.3b))
+qqline(resid(model.3b))
+shapiro.test(resid(model.3b))
+
+
+```
+
+Again, we are not respecting the heterocedasticity of the regression, so we need to transform the response variable Stunting.
+
+```{r}
+
+#data$Stunted = sqrt_x(data$Stunted)$x.t
+
+model.final = lme(Stunted ~ Year  + Area, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+
+
+summary(model.final)
+plot(model.final)
+qqnorm(resid(model.final))
+qqline(resid(model.final))
+shapiro.test(resid(model.final))
+
+
+```
+
+```{r}
+
+plot(model.final , Stunted ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.final , Stunted ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+
+
+
+
+```{r}
+
+plot(ranef(model.3))
+
+```
+
+## Modeling mortality
+
+Justification about fixed effects and random effects.
+
+```{r}
+
+model.1 = lme(Mortality ~ Year  + Biomass_anomaly + Area, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+
+
+```
+
+```{r}
+
+fixef(model.1)
+
+```
+
+```{r}
+
+model.0 = lm(Mortality ~ Year  + Biomass_anomaly + Area, data = data, na.action = na.omit)
+test=-2*logLik(model.0) +2*logLik(model.1)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+```
+
+This shows that the random effect is necessary.
+
+```{r}
+
+model.2 = lme(Mortality ~ Year  + Biomass_anomaly + Area, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+
+
+
+
+```
+
+```{r}
+
+fixef(model.2)
+
+```
+
+
+```{r}
+
+model.3 = lme(Mortality ~ Year  + Biomass_anomaly + Area, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+summary(model.3, corr = FALSE)
+
+
+```
+
+
+```{r}
+
+fixef(model.3)
+
+```
+
+
+```{r}
+
+model.4 = update(model.2, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+model.5 = update(model.3, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+
+
+```
+
+```{r}
+
+anova(model.4,model.5)
+
+```
+
+```{r}
+#Now model 4 versus model 1.
+model.1b = update(model.1, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+test=-2*logLik(model.1b) +2*logLik(model.4)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+model.4 = update(model.4, method = 'ML')
+model.2 = update(model.2, method = 'ML')
+anova(model.2,model.4)
+
+```
+
+```{r}
+#Model final?
+model.2 = update(model.2, .~.-Biomass_anomaly, method = 'REML')
+summary(model.2)
+```
+
+
+```{r}
+
+fixef(model.2)
+
+```
+
+```{r}
+
+plot(model.2 , Mortality ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.2 , Mortality ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+```{r}
+
+plot(model.2)
+
+```
+Not constant?
+
+```{r}
+
+model.2b=update(model.2,weights=varPower(form=~fitted(.)))
+
+plot(model.2)
+
+```
+
+
+```{r}
+
+qqnorm(resid(model.2b))
+qqline(resid(model.2b))
+shapiro.test(resid(model.2b))
+
+
+```
+
+Again we try to transform the response variable to achieve normality in the residuals:
+
+```{r}
+
+
+data$Mortality = sqrt_x(data$Mortality)$x.t
+
+model.final = lme(Mortality ~ Year + Area, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+
+
+summary(model.final)
+plot(model.final)
+qqnorm(resid(model.final))
+qqline(resid(model.final))
+shapiro.test(resid(model.final))
+
+```
+
+```{r}
+
+plot(model.final , Mortality ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.final , Mortality ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+
+```{r}
+
+plot(ranef(model.2))
+
+```

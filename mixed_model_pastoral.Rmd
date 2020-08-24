@@ -1,0 +1,730 @@
+---
+title: "midex_model_pastoral"
+author: "Ignacio García Sánchez-Migallón"
+date: "9/7/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('SASmixed')
+library(nlme)
+library(lme4)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(readxl)
+library(bestNormalize)
+library(dplyr)
+rm(list=ls())
+
+```
+
+# Data loading ------------------------------------------------------------
+
+
+Perform an exploratory analysis of the data.
+All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
+
+```{r}
+
+#Remember this data set has been touched manually after been generated with the pastoral_data_merger scripts.
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+data = read_excel('Pastoral_data/pastoral_data.xlsx')
+
+data$Concentrate = factor(data$Concentrate)
+data$Concentrate =  recode_factor(data$Concentrate, 'Very Low' = 0, 'Low' = 1, 'Average' = 2, 'Strong' = 3, 'Very Strong' = 4)
+
+data$Pasture_dispo = factor(data$Pasture_dispo)
+data$Pasture_dispo =  recode_factor(data$Pasture_dispo, 'Very insufficient' = 0, 'Insufficient' = 1, 'Average' = 2, 'Sufficient' = 3, 'Very sufficient' = 4)
+
+data$Water_dispo = factor(data$Water_dispo)
+data$Water_dispo =  recode_factor(data$Water_dispo, 'Very insufficient' = 0, 'Insufficient' = 1, 'Average' = 2, 'Sufficient' = 3, 'Very sufficient' = 4)
+
+data$Water_type = factor(data$Water_type)
+
+data$Overweight_GR = factor(data$Overweight_GR)
+
+data$Sickness_ON = factor(data$Sickness_ON)
+data$Sickness_ON =  recode_factor(data$Sickness_ON, 'No' = 0, 'Yes' = 1)
+
+data$Death_ON = factor(data$Death_ON)
+data$Death_ON =  recode_factor(data$Death_ON, 'No' = 0, 'Yes' = 1)
+
+data$Fire_ON = factor(data$Fire_ON)
+data$Fire_ON =  recode_factor(data$Fire_ON, 'No' = 0, 'Yes' = 1)
+
+summary(data)
+
+pastoral_list = data.frame(data$admin0Name, data$admin1Name,data$admin2Name)
+pastoral_list = unique(pastoral_list)
+write.csv(pastoral_list,'pastoral_list.csv')
+
+```
+
+```{r}
+
+ggplot(data) + aes(y = biomass_anomaly, fill = admin1Name, col = admin0Name)  + geom_boxplot() + theme_classic()
+
+```
+
+Burkina faso is having less biomass than usual during 2019 while Mali has more.
+
+# Pasture dispo ------------------------------------------------------------
+
+
+```{r}
+
+ggplot(data) + aes(x = Pasture_dispo, y = Biomass, fill = admin1Name, col = admin0Name) + geom_col() + theme_classic()
+
+```
+
+We can see how the biomass seem to have a relation with the pasture disponibility. Only region with very insufficient pasture is from Burkina Faso which is also having a biomass deficit.
+
+```{r}
+
+ggplot(data) + aes(x = Pasture_dispo, y = biomass_anomaly, fill = admin1Name, col = admin0Name) + geom_col() + theme_classic()
+
+```
+
+
+```{r}
+ggplot(data) + aes(x = Pasture_dispo, fill = admin0Name) + geom_bar() + theme_classic()
+```
+
+
+# Water dispo ------------------------------------------------------------
+
+
+```{r}
+
+ggplot(data) + aes(x = Water_dispo, y = Biomass, fill = admin1Name, col = admin0Name) + geom_col() + theme_classic()
+
+```
+
+Same way Burkina Faso has very insufficient pastures in one region, we can see how that region also has an insufficient water disponibility.
+
+```{r}
+
+ggplot(data) + aes(x = Water_dispo, y = biomass_anomaly, fill = admin1Name, col = admin0Name) + geom_col() + theme_classic()
+
+```
+
+
+```{r}
+
+
+ggplot(data) + aes(x = Water_dispo, fill = admin0Name) + geom_bar() + theme_classic()
+
+```
+
+# Water type  ------------------------------------------------------------
+
+```{r}
+
+
+ggplot(data) + aes(x = Water_type, fill = admin0Name) + geom_bar() + theme_classic()
+
+```
+
+```{r}
+
+
+ggplot(data) + aes(x = admin0Name, y = Water_dispo , fill = Water_type) + geom_col(position = 'dodge') + theme_classic()
+
+```
+
+# Animal weight  ------------------------------------------------------------
+
+```{r}
+
+
+ggplot(data) + aes(x = Overweight_GR, fill = admin0Name) + geom_bar() + theme_classic()
+
+```
+
+# Sickness  ------------------------------------------------------------
+
+```{r}
+
+
+ggplot(data) + aes(x = Sickness_ON, fill = admin0Name) + geom_bar() + theme_classic()
+
+```
+
+
+
+# Modeling Biomass  ------------------------------------------------------------
+
+First we create models with different random effects to test wether they are beneficial or not.
+
+```{r}
+
+model.1 = lm(Biomass ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, data = data, na.action = na.omit)
+model.2 =  lme(Biomass ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+model.3 = lme(Biomass ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin1Name/admin2Name, data = data, na.action = na.omit)
+model.4 = lme(Biomass ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin0Name/admin1Name/admin2Name, data = data, na.action = na.omit)
+
+
+```
+
+We test the effect of admin1Name
+
+```{r}
+
+test12=-2*logLik(model.1, REML=T) +2*logLik(model.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+
+As the value is close to 0, evidence suggest that the random effect is positive.
+
+Now, we test for using admin0Name and admin1Name as nested random effects against using only admin1Name as random effect.
+
+```{r}
+
+test23=-2*logLik(model.2, REML=T) +2*logLik(model.3, REML=T)
+mean(pchisq(test23,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+
+test24=-2*logLik(model.2, REML=T) +2*logLik(model.4, REML=T)
+mean(pchisq(test24,df=c(0,1),lower.tail=F))
+
+```
+
+Using a threshold of 0.05, evidence would suggest that the effect of the nested random effects is negative for the model and we could model it only using admin2Name. However, this is due to the fact that some admin2Name have very few points, even only 1 in some cases, leading to a totally useless regression on those regions as it totally overfits. As a result, we cannot use this model.
+
+```{r}
+
+model.1 = lm(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, data = data, na.action = na.omit)
+model.2 =  lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+model.3 = lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+
+```
+
+```{r}
+
+test12=-2*logLik(model.1, REML=T) +2*logLik(model.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+
+As the value is close to 0, evidence suggest that the random effect is positive.
+
+Now, we test for using admin0Name and admin1Name as nested random effects against using only admin1Name as random effect.
+
+```{r}
+
+test23=-2*logLik(model.2, REML=T) +2*logLik(model.3, REML=T)
+mean(pchisq(test23,df=c(0,1),lower.tail=F))
+
+```
+
+As we can see the introduction of admin0Name is to totally positive using a threshold of 0.05. Hence, we continue using only admin1 as a random effect, which is also logical because even inside the same countries provinces vary greatly.
+
+```{r}
+
+model.2
+
+```
+
+There seems to be a huge variability between provinces.
+
+```{r}
+
+VarCorr(model.2)
+
+```
+
+Using the model.2 with only admin1 as random effect, the variance explained is 60% just by the admin1Name.
+
+Now we check for interactions.
+
+```{r}
+
+model.2.int =  lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON + AREA:Death_ON + AREA:Fire_ON + Sickness_ON:Fire_ON + Water_type:Sickness_ON + Water_type:Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit, method = 'ML')
+model.2 = update(model.2, method = 'ML')
+
+anova(model.2,model.2.int)
+
+```
+
+We can see that the interactions don't seem to improve the model as per seen in the anova results.
+
+We are going to adjust now the fixed effects by removing those that are not statistically significant:
+
+```{r}
+model.2 = update(model.2, method = 'REML')
+summary(model.2)
+
+```
+
+
+```{r}
+
+model.2b = lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.2b)
+```
+
+```{r}
+
+model.2b = lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.2b)
+
+```
+
+```{r}
+
+model.2b = lme(Biomass ~  AREA + Concentrate + Pasture_dispo  + Water_type + Sickness_ON , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.2b)
+
+```
+
+```{r}
+
+model.2b = lme(Biomass ~  AREA  + Pasture_dispo  + Water_type + Sickness_ON , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.2b)
+
+```
+
+
+We observe that now all the variables are signiticative. Let's compre the full model and the reduced model:
+
+```{r}
+
+AIC(logLik(model.2))
+AIC(logLik(model.2b))
+
+```
+
+```{r}
+
+
+plot(model.2b , Biomass ~ fitted(.) , abline = c(0,1))
+plot(model.2b , Biomass ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.2b , Biomass ~ fitted(.) | admin1Name, abline = c(0,1))
+plot(model.2b , Biomass ~ fitted(.) | admin2Name, abline = c(0,1))
+
+par(mfrow=c(1,2))
+plot(model.2b)
+qqnorm(resid(model.2b))
+qqline(resid(model.2b))
+shapiro.test(resid(model.2b))
+
+```
+
+
+
+
+```{r}
+
+plot(ranef(model.2b))
+
+```
+
+# Modeling Biomass Anomaly  ------------------------------------------------------------
+
+First we create models with different random effects to test wether they are beneficial or not.
+
+```{r}
+
+model.1 = lm(biomass_anomaly ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, data = data, na.action = na.omit)
+model.2 =  lme(biomass_anomaly ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+model.3 = lme(biomass_anomaly ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin1Name/admin2Name, data = data, na.action = na.omit)
+model.4 = lme(biomass_anomaly ~ Mean + AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin0Name/admin1Name/admin2Name, data = data, na.action = na.omit)
+
+
+```
+
+We test the effect of admin1Name
+
+```{r}
+
+test12=-2*logLik(model.1, REML=T) +2*logLik(model.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+
+As the value is close to 0, evidence suggest that the random effect is positive.
+
+Now, we test for using admin0Name and admin1Name as nested random effects against using only admin1Name as random effect.
+
+```{r}
+
+test23=-2*logLik(model.2, REML=T) +2*logLik(model.3, REML=T)
+mean(pchisq(test23,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+
+test24=-2*logLik(model.2, REML=T) +2*logLik(model.4, REML=T)
+mean(pchisq(test24,df=c(0,1),lower.tail=F))
+
+```
+
+
+
+```{r}
+
+model.1 = lm(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, data = data, na.action = na.omit)
+model.2 =  lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+model.3 = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+
+```
+
+```{r}
+
+test12=-2*logLik(model.1, REML=T) +2*logLik(model.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+
+As the value is close to 0, evidence suggest that the random effect is positive.
+
+Now, we test for using admin0Name and admin1Name as nested random effects against using only admin1Name as random effect.
+
+```{r}
+
+test23=-2*logLik(model.2, REML=T) +2*logLik(model.3, REML=T)
+mean(pchisq(test23,df=c(0,1),lower.tail=F))
+
+```
+
+As we can see the introduction of admin0Name is totally positive using a threshold of 0.05. Hence, we use admin0 and nested admin1 as a random effect, which is also logical.
+
+```{r}
+
+model.3
+
+```
+
+There seems to be a huge variability between provinces.
+
+```{r}
+
+VarCorr(model.3)
+
+```
+
+Using the model.2 with only admin1 as random effect, the variance explained is 85% just by the admin0Name and 60% by admin1.
+
+Now we check for interactions.
+
+```{r}
+
+model.3.int =  lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON + AREA:Death_ON + AREA:Fire_ON + Sickness_ON:Fire_ON + Water_type:Sickness_ON + Water_type:Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit, method = 'ML')
+model.3 = update(model.3, method = 'ML')
+
+anova(model.3,model.3.int)
+
+```
+
+We can see that the interactions seem to improve the model.
+
+We are going to adjust now the fixed effects by removing those that are not statistically significant:
+
+```{r}
+model.3.int = update(model.3.int, method = 'REML')
+summary(model.3.int)
+
+```
+
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON + AREA:Death_ON + AREA:Fire_ON + Sickness_ON:Fire_ON + Water_type:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON + AREA:Death_ON + AREA:Fire_ON + Sickness_ON:Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON + AREA:Death_ON + AREA:Fire_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON + AREA:Water_type, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON  + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate + Pasture_dispo + Water_type + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Concentrate  + Water_type + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Water_type + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Water_type + Fire_ON + AREA:Water_type + AREA:Sickness_ON, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+```{r}
+
+model.3b = lme(biomass_anomaly ~  AREA + Water_type + Fire_ON + AREA:Water_type, random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.3b)
+```
+
+In the end we are left with a model composed only of the interaction of area and water type, water type, area and fire_ON.
+
+We observe that now all the variables are signiticative. Let's compre the full model and the reduced model:
+
+```{r}
+
+AIC(logLik(model.3.int))
+AIC(logLik(model.3b))
+
+```
+
+```{r}
+
+
+plot(model.3b , biomass_anomaly ~ fitted(.) , abline = c(0,1))
+plot(model.3b , biomass_anomaly ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.3b , biomass_anomaly ~ fitted(.) | admin1Name, abline = c(0,1))
+plot(model.3b , biomass_anomaly ~ fitted(.) | admin2Name, abline = c(0,1))
+
+par(mfrow=c(1,2))
+plot(model.3b)
+qqnorm(resid(model.3b))
+qqline(resid(model.3b))
+shapiro.test(resid(model.3b))
+
+```
+
+
+
+
+```{r}
+
+plot(ranef(model.3b))
+
+```
+
+# Modelin at admin2 level -----------------------------------------------
+
+
+We need to remove those admin2 where there are only one or two points as we cannot infer a general behaviour from that area with that few information.
+
+```{r}
+
+remove = c('Koungheul', 'Tchintabaraden', 'Tillaberi', 'Ville de Tahoua', 'Tambacounda',  'Ouallam', "N'Guigmi", 'Mayahi', 'Matam', 'Malbaza', 'MaÃ¯nÃ©', 'Soroa', 'Louga', 'Koumpentoum', 'Keita', 'Kebemer', 'Kanel', 'Ingall', 'Guidan', 'Roumdji', 'Goudiry', 'Diffa', 'Bakel', 'Abala', 'Abalak','Tanout','Guidan Roumdji','Bouza')
+
+data = data[data$admin2Name %in% remove == FALSE,]
+
+
+#These have weird  characters are a result of an encoding error so need to be removed manually.
+data = data[-c(78,79),]
+
+```
+
+
+```{r}
+
+data_saved = data
+data$Biomass = data$Biomass/1000
+
+```
+
+
+```{r}
+model.0 = lm(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, data = data, na.action = na.omit)
+model.1 =  lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+model.2 = lme(Biomass ~  AREA + Concentrate + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin1Name/admin2Name, data = data, na.action = na.omit)
+
+```
+
+
+```{r}
+
+test01=-2*logLik(model.0, REML=T) +2*logLik(model.1, REML=T)
+mean(pchisq(test01,df=c(0,1),lower.tail=F))
+
+test12=-2*logLik(model.1, REML=T) +2*logLik(model.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+The more complete model (admin1/admin2) does not seem to be better than the admin2 model as seen by the values of the log-likelihood test to test the importance of the random effects.
+
+We don't check for interactions as given the currrent data we cannot perform them (not enough observations with each factor). As a result, we test for the fixed effects.
+
+```{r}
+
+summary(model.1)
+
+```
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Pasture_dispo + Water_dispo + Water_type + Sickness_ON + Death_ON + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Pasture_dispo + Water_dispo + Water_type  + Death_ON + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Pasture_dispo + Water_dispo + Water_type   + Fire_ON, random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Pasture_dispo + Water_dispo + Water_type   , random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Pasture_dispo  + Water_type   , random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+```{r}
+
+model.1 =  lme(Biomass ~  AREA  + Water_type   , random = ~ 1 | admin2Name, data = data, na.action = na.omit)
+summary(model.1)
+
+```
+
+```{r}
+
+coef(model.1)
+
+```
+
+```{r}
+
+
+plot(model.1 , Biomass ~ fitted(.) , abline = c(0,1))
+plot(model.1 , Biomass ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.1 , Biomass ~ fitted(.) | admin1Name, abline = c(0,1))
+plot(model.1 , Biomass ~ fitted(.) | admin2Name, abline = c(0,1))
+
+par(mfrow=c(1,2))
+plot(model.1)
+qqnorm(resid(model.1))
+qqline(resid(model.1))
+shapiro.test(resid(model.1))
+
+
+```
+
+As we can see this model totally overfits based on the only biomass value each admin2 has, as a result, it is not an useful model. On the other hand, normality of residuals assumption is not met, (it is met only when we download biomass by 1000 and don't take any attribute away. After reaching the reduced model, we see that the residuals are not normal anymore.)
+
+
+
+# Raster pastoral ---------------------------
+
+```{r}
+
+library(gstat)
+library(tidyverse)
+library(fasterize)
+library(tiff)
+library(raster)
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+
+data_biomass =  st_read('Biomass_data/BIO_ADM2')
+data_pastoral = st_read('Pastoral_data/sites_geosahel_octNov2019')
+
+data_biomass$BIO_2019 = sqrt(data_biomass$BIO_2019)
+
+raster_biomass = raster(data_biomass, res = 1/100)
+raster_pastoral = raster(data_pastoral, res = 1/100)
+
+#Use of fasterize instead of rasterize because it is WAY faster
+rasterize_biomass = fasterize(data_biomass, raster_biomass, field = 'BIO_2019')
+
+
+coordinates  <- do.call(rbind, st_geometry(data_pastoral)) %>% 
+    as_tibble() %>% setNames(c("lon","lat"))
+
+#png(filename="biomass_sahel_testingData_Biomass.png", width = 2048, height = 1080)
+plot(rasterize_biomass)
+points(coordinates$lon, coordinates$lat, col = data_pastoral$Eau_dispo)
+
+
+
+
+```
+
+```{r}
+
+library(tiff)
+
+library(raster)
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+
+
+str_name<-'Biomass_pictures/BiomassValue2019.tif' 
+
+biomass_tiff<-raster(str_name) 
+
+data_pastoral = st_read('Pastoral_data/sites_geosahel_octNov2019')
+
+raster_pastoral = raster(data_pastoral, res = 1/100)
+
+coordinates  <- do.call(rbind, st_geometry(data_pastoral)) %>% 
+    as_tibble() %>% setNames(c("lon","lat"))
+
+#png(filename="biomass_sahel_testing.png", width = 2048, height = 1080)
+plot(biomass_tiff)
+points(coordinates$lon, coordinates$lat, col = data_pastoral$Eau_dispo)
+
+```

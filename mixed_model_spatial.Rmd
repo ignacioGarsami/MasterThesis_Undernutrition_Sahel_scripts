@@ -1,0 +1,256 @@
+---
+title: "Mixed model spatial"
+author: "Ignacio García Sánchez-Migallón"
+date: "17/07/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('SASmixed')
+library(nlme)
+library(lme4)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(gstat)
+library(tidyverse)
+library(fasterize)
+library(tiff)
+library(raster)
+library(sf)
+rm(list=ls())
+
+```
+
+## Introduction
+
+Perform an exploratory analysis of the data.
+All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
+
+```{r}
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+data = st_read('Mixed_model_data/base_data_raster')
+#data$X = NULL
+
+data = st_as_sf(data, sf_column_name = 'geometry')
+
+
+#data$Biomass_anomaly = bestNormalize(data$Biomass_anomaly)$x.t
+
+#data$Biomass_anomaly = scale(data$Biomass_anomaly)
+data$Bmss_nm = (data$Bmss_nm)
+data$Area = (data$Area)
+
+summary(data)
+
+#Remove all columns where wasted is NA
+#data = data[!is.na(data$Stunted) & !is.na(data$Bmss_nm) ,]
+
+```
+
+
+## Modeling Wastedness
+
+```{r}
+
+# data = data %>%
+#   group_by(admn0Nm, admn1Nm) %>%
+#   summarise( Wasted = mean(Wasted), geometry = merge(geometry, geometry))
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'Wasted')
+plot(rasterize_biomass, main = 'Mean value per admin1')
+
+
+```
+
+Just to get a nice visualization of the area:
+
+```{r}
+
+world_points<- st_centroid(data)
+world_points <- cbind(data, st_coordinates(st_centroid(data$geometry)))
+
+ggplot(data = data) +geom_sf(data = x, size = 0.25, color = "black",aes(fill= x$Stunted)) + geom_text(data= world_points,aes(x=X, y=Y, label=admn1Nm), color = 'burlywood3', fontface = 'bold', check_overlap = FALSE,size = 2.5) + annotate(geom = 'text', x = -90, y = 26, label = 'Sahel Map', fontface = 'italic', color = 'grey22', size = 6, location = 'bl', width_hint = 0.5)  + coord_sf(xlim = c(25, -20), ylim = c(0, 28), expand = FALSE) + xlab('Longitude') + ylab('Latitude') + ggtitle('Mean chronic malnutrition rates in West Africa') + labs(fill = 'Stunting rate') + theme(panel.grid.major = element_line(color = gray(.5), linetype = 'dashed', size = 0.5), panel.background = element_rect(fill = 'aliceblue'))
+
+
+```
+
+
+We are going to star by using a simple model, result of the previous basic model analysis. There we are going to plot the residuals in the raster to see if they seem to be distributed as random.
+
+We are using the best model as determined by the mixed model basic.
+
+```{r}
+
+model.1 = lme(Wasted ~ Year + Area + Bmss_nm + Area:Bmss_nm, random = list(admn1Nm = pdDiag(~admn0Nm)), data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+
+```
+
+```{r}
+
+residuals  = residuals(model.1)
+
+```
+
+```{r}
+
+data$residuals = residuals
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals per admin1')
+
+
+
+```
+Are the residuals correlated spatially?
+
+```{r}
+
+library(spatialreg)
+
+
+nb <- poly2nb(data)
+lw <- nb2listw(nb)
+
+
+lag = lagsarlm(residuals ~ 1, data=data, lw, tol.solve=1.0e-30)
+
+summary(lag)
+  
+  
+```
+
+
+```{r}
+
+x = data[data$Year == 2018,]
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1 in 2018')
+
+
+
+```
+
+There seems to be certain relationship among the residuals as seen in the raster, the patron does not seem to be random, which may imply certain spatial correlation.
+
+Now we are going to try an Spatial Lag Model.
+
+
+```{r}
+
+spatial.1 = lagsarlm(Wasted ~ Year + Area + Bmss_nm + Area:Bmss_nm, data=data, lw, tol.solve=1.0e-30)
+summary(spatial.1)
+
+```
+
+```{r}
+
+data$residuals <- residuals(spatial.1)
+
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+```
+
+```{r}
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1')
+
+```
+
+
+Spatial error model:
+
+```{r}
+library(spatialreg)
+
+
+#nb <- poly2nb(data)
+#lw <- nb2listw(nb)
+
+spatial.2 = errorsarlm(Wasted ~ Year + Area + Bmss_nm + Area:Bmss_nm, data=data, lw, tol.solve=1.0e-30)
+summary(spatial.2)
+
+```
+
+```{r}
+
+data$residuals <- residuals(spatial.2)
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+```
+
+```{r}
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1')
+
+
+```
+
+
+
+```{r}
+
+BIC(model.1)
+BIC(spatial.1)
+BIC(spatial.2)
+
+```
+
+
+Need to try this library:mgcv for GAM's where apparently I can add random effects + the spatial autocorrelation.
+
+

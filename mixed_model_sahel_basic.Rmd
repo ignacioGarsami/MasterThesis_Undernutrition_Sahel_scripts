@@ -1,0 +1,250 @@
+---
+title: "mixed_model_sahel_basic"
+author: "Ignacio García Sánchez-Migallón"
+date: "13/7/2020"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('SASmixed')
+library(nlme)
+library(lme4)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+rm(list=ls())
+
+```
+
+## Introduction
+
+Perform an exploratory analysis of the data.
+All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
+
+```{r}
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+data = read.csv('Mixed_model_data/base_data.csv')
+
+# west_africa = data.frame(data$admin0Name, data$admin1Name)
+# west_africa = unique(west_africa)
+# write.csv(west_africa,'west_africa_list.csv')
+
+data$X = NULL
+
+data = data[
+            (data$admin0Name == 'Mauritania' & data$admin1Name %in% c('Hodh Ech Chargi', 'Hodh El Gharbi', 'Tagant', 'Assaba', 'Brakna',    'Gorgol', 'Guidimakha', 'Trarza', 'Nouakchott') ) |
+              (data$admin0Name == 'Senegal' & data$admin1Name %in% c('Saint Louis', 'Louga', 'Matam', 'Dakar', 'Thies', 'Diourbel') ) |
+              (data$admin0Name == 'Mali' & data$admin1Name %in% c( 'Tombouctou', 'Gao', 'Kayes', 'Koulikoro', 'Segou', 'Mopti') ) |
+              (data$admin0Name == 'Niger' & data$admin1Name %in% c('Agadez') == FALSE ) |
+              (data$admin0Name == 'Chad' & data$admin1Name %in% c('Zone 2','Zone 3','Zone 4','Zone 5') ) |
+              (data$admin0Name == 'Nigeria' & data$admin1Name %in% c('Sokoto', 'Zamfara','Katsina','Kano','Jigawa','Yobe','Borno') & (data$Wasted > 0 | is.na(data$Wasted))  ) |
+              (data$admin0Name == 'Burkina Faso' & data$admin1Name %in% c('Sahel', 'Nord', 'Centre-Nord') )
+            ,]
+
+# sahel = data.frame(data$admin0Name, data$admin1Name)
+# sahel = unique(sahel)
+# write.csv(sahel,'sahel_list.csv')
+#data$Biomass_anomaly = bestNormalize(data$Biomass_anomaly)$x.t
+
+#data$Biomass_anomaly = scale(data$Biomass_anomaly)
+data$Biomass_anomaly = (data$Biomass_anomaly)/1000
+#data$Area = scale(data$Area)
+#data$Wasted = log(data$Wasted+1)
+summary(data)
+
+```
+
+
+## Modeling Wastedness
+
+```{r}
+library(MASS)
+library(boxcoxmix)
+model = lm(Wasted ~ Year  + Area + Biomass_anomaly, data = data, na.action = na.omit)
+#boxcox(model)
+summary(data$Wasted)
+
+```
+
+```{r}
+
+#boxcox(model, lambda=seq(.5,.8,0.001))
+
+```
+
+```{r}
+
+lambda = 0.55
+#data$Wasted <- (data$Wasted^lambda - 1) / (lambda)
+model = lm(Wasted ~ Year  + Area + Biomass_anomaly, data = data, na.action = na.omit)
+
+```
+
+
+Justification about fixed effects and random effects.
+
+```{r}
+
+model.1 = lme(Wasted ~ Year  + Area + Biomass_anomaly , random = ~ 1 | admin1Name, data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+
+```
+
+```{r}
+
+fixef(model.1)
+
+```
+
+```{r}
+
+#model.0 = lm(Wasted ~ Year + Mean + Biomass_anomaly + Area, data = data, na.action = na.omit)
+#test=-2*logLik(model.0) +2*logLik(model.1)
+#mean(pchisq(test,df=c(0,1),lower.tail=F))
+```
+
+This shows that the random effect is necessary.
+
+```{r}
+
+model.2 = lme(Wasted ~ Year + Area + Biomass_anomaly, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+
+
+
+
+```
+
+```{r}
+
+fixef(model.2)
+
+```
+
+
+```{r}
+
+model.3 = lme(Wasted ~ Year + Area + Biomass_anomaly, random = ~ 1 | admin0Name/admin1Name, data = data, na.action = na.omit)
+summary(model.3, corr = FALSE)
+
+
+```
+
+
+```{r}
+
+fixef(model.3)
+
+```
+
+
+```{r}
+
+model.4 = update(model.2, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+model.5 = update(model.3, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+
+
+```
+
+```{r}
+
+anova(model.4,model.5)
+
+```
+
+```{r}
+#Now model 4 versus model 1.
+model.1b = update(model.1, .~.+Year:Biomass_anomaly+Area:Biomass_anomaly)
+test=-2*logLik(model.1b) +2*logLik(model.4)
+mean(pchisq(test,df=c(0,1),lower.tail=F))
+
+```
+
+```{r}
+model.4 = update(model.4, method = 'ML')
+model.2 = update(model.2, method = 'ML')
+anova(model.2,model.4)
+
+```
+
+```{r}
+#Model final?
+model.4 = update(model.4, method = 'REML')
+summary(model.4)
+```
+
+```{r}
+
+model.4 = update(model.4, .~.-Year:Biomass_anomaly, method = 'REML')
+summary(model.4)
+
+```
+
+```{r}
+
+fixef(model.4)
+```
+
+```{r}
+
+
+plot(model.4 , Wasted ~ fitted(.), abline = c(0,1))
+plot(model.4 , Wasted ~ fitted(.) | admin0Name, abline = c(0,1))
+plot(model.4 , Wasted ~ fitted(.) | admin1Name, abline = c(0,1))
+
+```
+
+```{r}
+
+
+plot(model.4 , Wasted ~ Year | admin1Name, abline = c(0,1), ylim = c(0,40)) 
+plot(model.4 , fitted(.) ~ Year | admin1Name, abline = c(0,1), ylim = c(0,40))
+
+```
+
+
+```{r}
+
+plot(model.4)
+
+```
+Not constant?
+
+```{r}
+
+model.4b=update(model.4,weights=varPower(form=~fitted(.)))
+
+plot(model.4b)
+
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+plot(model.4)
+qqnorm(resid(model.4))
+qqline(resid(model.4))
+shapiro.test(resid(model.4))
+
+
+```
+
+Why is the biomass not significative in this case? Making a model focused on the Sahel was expected to show same results or even stronger evidence than the general model. However, a hypothesis is that in this model, all the regions have a similar climate and high indexes of wasting, all the examples show the same behaviour, approximately, and that is shown by the first log-likelihood test that shows that the regression is better with NO random effects. On the other hand, the full model with all the areas and not only the sahel ones, show the biomass as significative as it has example of areas rich in biomass with smaller indexes of wasting and areas with less biomass and higher wasting rates. As a result, we need more data to observe the expected results, although it might also be confirmation bias.
+
+# Modeling Stunting ------------------------------------------------------
+
+```{r}
+model.2 = lme(Stunted ~ Year + Area*Biomass_anomaly, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+```
+
+# Modeling Mortality under 5 ---------------------------------------------
+
+```{r}
+model.2 = lme(Mortality ~ Year + Area *Biomass_anomaly, random = list(admin1Name = pdDiag(~admin0Name)), data = data, na.action = na.omit)
+summary(model.2, corr = FALSE)
+```

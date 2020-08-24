@@ -1,0 +1,521 @@
+---
+title: "mixed_model_sahel_spatial"
+author: "Ignacio García Sánchez-Migallón"
+date: "18/7/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('SASmixed')
+library(nlme)
+library(lme4)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(gstat)
+library(tidyverse)
+library(fasterize)
+library(tiff)
+library(raster)
+library(sf)
+rm(list=ls())
+
+```
+
+## Introduction
+
+Perform an exploratory analysis of the data.
+All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
+
+```{r}
+
+
+setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
+
+data = st_read('Mixed_model_data/base_data_raster')
+
+data = st_as_sf(data, sf_column_name = 'geometry')
+
+data = data[
+            (data$admn0Nm == 'Mauritania' & data$admn1Nm %in% c('Hodh Ech Chargi', 'Hodh El Gharbi', 'Tagant', 'Assaba', 'Brakna',    'Gorgol', 'Guidimakha', 'Trarza', 'Nouakchott') ) |
+              (data$admn0Nm == 'Senegal' & data$admn1Nm %in% c('Saint Louis', 'Louga', 'Matam', 'Dakar', 'Thies', 'Diourbel') ) |
+              (data$admn0Nm == 'Mali' & data$admn1Nm %in% c( 'Tombouctou', 'Gao', 'Kayes', 'Koulikoro', 'Segou', 'Mopti') ) |
+              (data$admn0Nm == 'Niger' & data$admn1Nm %in% c('Agadez') == FALSE ) |
+              (data$admn0Nm == 'Chad' & data$admn1Nm %in% c('Zone 2','Zone 3','Zone 4','Zone 5') ) |
+              (data$admn0Nm == 'Nigeria' & data$admn1Nm %in% c('Sokoto', 'Zamfara','Katsina','Kano','Jigawa','Yobe','Borno') & (data$Wasted > 0 | is.na(data$Wasted))  ) |
+              (data$admn0Nm == 'Burkina Faso' & data$admn1Nm %in% c('Sahel', 'Nord', 'Centre-Nord') )
+            ,]
+
+
+data$Bmss_nm = (data$Bmss_nm)
+
+summary(data)
+
+#Remove all columns where wasted is NA
+#Remember to change this!
+data = data[!is.na(data$Wasted) & !is.na(data$Bmss_nm) ,]
+
+#Use this to test the effect of removing the very few points with very high wasting values.
+#data = data[data$Wasted <= 30,]
+
+```
+
+
+## Modeling Wastedness
+
+```{r}
+
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'Stunted')
+plot(rasterize_biomass, main = 'Mean value per admin1')
+
+
+```
+
+ This is just to get a nice plot of the area.
+
+```{r}
+
+world_points<- st_centroid(data)
+world_points <- cbind(data, st_coordinates(st_centroid(data$geometry)))
+
+ggplot(data = x) +
+geom_sf(fill= x$Wasted) +
+geom_text(data= world_points,aes(x=X, y=Y, label=admn1Nm),
+    color = "black", check_overlap = FALSE, size = 2.5) +
+annotate(geom = "text", x = -90, y = 26, label = "Gulf of Mexico", 
+    fontface = "italic", color = "grey22", size = 6) +
+coord_sf(xlim = c(25, -20), ylim = c(9, 27), expand = FALSE) + theme_light()
+
+ggplot() + 
+  geom_sf(data = x, size = 0.25, color = "black",aes(fill= x$Wasted)) + 
+  ggtitle("West Africa") + 
+  coord_sf() +
+  labs(fill = 'Biomass') +
+  theme_classic()
+
+
+ggplot(data = x) + geom_sf(data = x, size = 0.25, color = "black",aes(fill= x$Stunted))  + geom_text(data= world_points,aes(x=X, y=Y, label=admn1Nm), color = 'burlywood3', fontface = 'bold', check_overlap = FALSE,size = 2.5) + annotate(geom = 'text', x = -90, y = 26, label = 'Sahel Map', fontface = 'italic', color = 'grey22', size = 6, location = 'bl', width_hint = 0.5)  + coord_sf(xlim = c(25, -20), ylim = c(9, 27), expand = FALSE) + xlab('Longitude') + ylab('Latitude') + ggtitle('Mean chronic malnutrition rates in the Sahel') + labs(fill = 'Stunting rate') + theme(panel.grid.major = element_line(color = gray(.5), linetype = 'dashed', size = 0.5), panel.background = element_rect(fill = 'aliceblue'))
+
+
+```
+
+
+We are going to star by using a simple model, result of the previous basic model analysis. There we are going to plot the residuals in the raster to see if they seem to be distributed as random.
+
+We are using the best model as determined by the mixed model basic.
+
+```{r}
+
+model.1 = lme(Wasted ~  Year + Area + Bmss_nm, random = list(admn1Nm = pdDiag(~admn0Nm)), data = data, na.action = na.omit)
+summary(model.1, corr = FALSE)
+
+#model.1 = lme(Wasted ~   Area + Bmss_nm, random = ~ 1 + as.factor(Year) | list(admn1Nm = pdDiag(~admn0Nm)), data = data, na.action = na.omit)
+#summary(model.1, corr = FALSE)
+
+
+
+```
+
+```{r}
+
+residuals  = residuals(model.1)
+
+```
+
+```{r}
+
+data$residuals = residuals
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals per admin1')
+
+
+
+```
+Are the residuals correlated spatially?
+
+```{r}
+
+library(spatialreg)
+library(spdep)
+
+
+nb <- poly2nb(data)
+lw <- nb2listw(nb)
+
+
+lag = lagsarlm(residuals ~ 1, data=data, lw, tol.solve=1.0e-30)
+
+summary(lag)
+  
+  
+```
+
+
+```{r}
+
+x = data[data$Year == 2018,]
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Residuals value per admin1 in 2018')
+
+
+
+```
+
+There seems to be certain relationship among the residuals as seen in the raster, the patron does not seem to be random, which may imply certain spatial correlation.
+
+In order to see which spatial model might be useful, we can use a Lagrange Multiplier test statistics to see if the spatial model that may fit the best is an spatial error model and an spatial lag model.
+
+
+```{r}
+
+model.test =lm(Wasted ~ Year + Area + Bmss_nm, data = data, na.action = na.omit)
+
+test.lagrange.err <- lm.LMtests(model.test,lw, test=c("LMerr","RLMerr"))
+
+test.lagrange.lag <- lm.LMtests(model.test,lw, test=c("LMlag","RLMlag"))
+
+
+
+```
+
+```{r}
+
+test.lagrange.err
+
+```
+
+```{r}
+
+test.lagrange.lag
+
+```
+
+We can see that either the "LMerr" and both lag models seem to be significant based on the p-values obtained. As a result, we are going to perform maximum likelihood error spatial model and maximum likelihood lag spatial models.
+
+
+Now we are going to try an Spatial Lag Model.
+
+
+```{r}
+
+spatial.1 = lagsarlm(Wasted ~ Year + Area + Bmss_nm, data=data , lw, tol.solve=1.0e-30)
+summary(spatial.1)
+
+```
+
+The spatial autoregressive parameter, rho, is highly significant as indicated by the p-value of almost 0 on an asymptotic t-test. Likelihood ratio test also shows that the Rho is significant.
+
+```{r}
+
+data$residuals <- residuals(spatial.1)
+
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+```
+
+```{r}
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1')
+
+```
+
+
+Spatial error model:
+
+```{r}
+library(spatialreg)
+
+
+#nb <- poly2nb(data)
+#lw <- nb2listw(nb)
+
+spatial.2 = errorsarlm(Wasted ~ Year + Area + Bmss_nm, data=data, lw, tol.solve=1.0e-30)
+summary(spatial.2)
+
+```
+
+In this model we can see that lambda is also significant in the same way as Rho with the lag model. Either by a Log Rank test as well as an asymptotic test.
+
+```{r}
+
+data$residuals <- residuals(spatial.2)
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+```
+
+```{r}
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1')
+
+
+```
+
+Now we are going to fit an Spatial Durbin Model, which includes the spatially lagged explanatory variables incuded (Like in mixed models?)
+
+```{r}
+
+
+
+spatial.3 = lagsarlm(Wasted ~ admn0Nm + admn1Nm + Year + Area + Bmss_nm, type = 'mixed', data=data , Durbin = list(admn1Nm = pdDiag(~admn0Nm)), lw, tol.solve=1.0e-30,  na.action = na.omit)
+summary(spatial.3)
+
+```
+
+
+
+```{r}
+
+data$residuals <- residuals(spatial.3)
+
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean)
+
+x
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+```
+
+```{r}
+
+biomass_raster = raster(x, res = 1/100)
+rasterize_biomass = fasterize(x, biomass_raster, field = 'residuals')
+plot(rasterize_biomass, main = 'Mean residuals value per admin1')
+
+```
+
+We can see that there is spatial autocorelation based on the p-value of the LM test, however that is probably due to the mean residuals being 0 in every area.
+
+```{r}
+
+qqnorm(resid(spatial.3))
+qqline(resid(spatial.3))
+
+```
+
+```{r}
+
+library(MuMIn)
+
+r.squaredGLMM(model.1)
+
+```
+
+
+```{r}
+
+BIC(model.1)
+BIC(spatial.1)
+BIC(spatial.2)
+
+```
+
+```{r}
+
+anova.sarlm(spatial.1,spatial.2)
+
+```
+
+
+
+Need to try this library:mgcv for GAM's where apparently I can add random effects + the spatial autocorrelation.
+
+
+# GAM'S
+
+```{r}
+
+library(mgcv)
+
+```
+
+```{r}
+
+gam.lme = gamm(Wasted ~ s(Year, bs = 'tp') + s(Area, bs = 'cp') + s(Bmss_nm, bs = 'cp'), random = list(admn1Nm = pdDiag(~admn0Nm)), data = data, na.action = na.omit)
+summary(gam.lme$lme, corr = FALSE)
+
+```
+
+```{r}
+
+summary(gam.lme$gam)
+
+```
+
+```{r}
+
+library(visreg)
+gam =  gam(Wasted ~ admn0Nm + admn1Nm + s(Year, bs = 'tp') + s(Area, bs = 'cp') + s(Bmss_nm, bs = 'cc'), data = data, na.action = na.omit )
+gam.2 =  gam(Wasted ~ s(Year) + s(Area) + s(Bmss_nm), data = data, na.action = na.omit )
+summary(gam)
+visreg(gam,"Bmss_nm")
+
+```
+
+```{r}
+
+anova.gam(gam,gam.2)
+
+```
+
+As seen here the effect of the biomass is extremely hard to capture given the huge differencces in biomass. As a result, maybe it would be better to study the regions not by geographic location but by biomass value. Furthermore, removing the areas with very high wasting values (+30) increments the R-squared a bit. Also, adding the regions admn1Nm and admn0Nm to the GAM makes the R-adjusted to sit at 0.53  which is not a very high result but its way more promising the the values we were managing before.
+
+Conclussions of today: GAMS are a bit too complex to start with them at this point, require more study and preparation, can be a nice mention in the document but definetely won't be used as a main model.
+
+
+# spaMM ----------------------------
+
+
+```{r}
+
+library(spaMM)
+library(spatialreg)
+library(spdep)
+library(proj4)
+
+```
+
+First the model without spatial components:
+
+```{r}
+
+spam.mixed = fitme(Wasted ~ Year + Area + Bmss_nm + (admn0Nm || admn1Nm),data=data, method = 'ML')
+
+summary(spam.mixed)
+
+AIC(spam.mixed)
+AIC(model.1)
+
+```
+
+
+```{r}
+
+#data = data[data$Year == 2018,]
+
+options(warn=-1)
+
+
+nb <- poly2nb(data)
+lw <- nb2listw(nb)
+
+#unique_data = data[unique(data$admn1Nm),]
+
+centroids <- st_transform(data$geometry, 29101) %>% 
+  st_centroid() %>% 
+  # this is the crs from d, which has no EPSG code:
+  st_transform(., '+proj=longlat +ellps=GRS80 +no_defs') %>%
+  # since you want the centroids in a second geometry col:
+  st_geometry()
+
+# check with
+plot(st_geometry(centroids))
+plot(centroids[, 'centroids'], add = T, col = 'red', pch = 19)
+
+coordinates = st_coordinates(centroids)
+
+data$lat = coordinates[,1]
+data$lon = coordinates[,2]
+
+proj4string <- "+proj=utm +zone=19 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs "
+pj <- project(centroids, proj4string, inverse=TRUE)
+
+library(surveillance)
+adj = (poly2adjmat(data))
+
+MLdistMat <- as.matrix(proxy::dist(centroids))
+spam = corrHLfit(Wasted ~ Area + Bmss_nm + Matern( 1 | lat + lon),data=data, method="HL(0,1)", ranPars=list(nu=0.5,rho=2.255197,lambda=1.075))
+
+data$geometry = NULL
+
+
+spam = suppressWarnings(fitme(Wasted ~  Area + Bmss_nm + Matern(1 | lat + lon) + (admn0Nm || admn1Nm),distMatrix = MLdistMat,  method="ML",data=data, family=gaussian()))
+
+#spam = suppressWarnings(fitme(Wasted ~ Year  + Area + Bmss_nm + AR1(1|Year) + Matern(1 | lat + lon) + (admn0Nm || admn1Nm),distMatrix = MLdistMat,adjMatrix = adj,  method="ML",data=data, family=gaussian()))
+
+#An idea can be adding year as an autoregressive component as a time series.
+#spam = suppressWarnings(fitme(Wasted ~ Year  + Area + Bmss_nm + AR1( 1 | Year) + (admn0Nm || admn1Nm),distMatrix = MLdistMat, method="ML",data=data, family=gaussian()))
+
+summary(spam)
+
+#lmer(wt ~ treat + weeks + (weeks || subject), data=ratdrink)
+#(Wasted ~   Area + Bmss_nm, random = ~ 1 + as.factor(Year) | list(admn1Nm = pdDiag(~admn0Nm)), data = data, na.action = na.omit)
+
+
+#plot(spam , eta(.) ~ Wasted | admin1Name, abline = c(0,1), ylim = c(0,40))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
