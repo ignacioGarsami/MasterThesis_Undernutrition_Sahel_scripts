@@ -1,7 +1,7 @@
 ---
-title: "Final Modeling Notebook Sahel"
+title: "Final Modeling Notebook WestAfrica"
 author: "Ignacio García Sánchez-Migallón"
-date: "20/8/2020"
+date: "25/8/2020"
 output: pdf_document
 ---
 
@@ -22,37 +22,18 @@ library(sf)
 library(spatialreg)
 library(spdep)
 rm(list=ls())
-
 ```
 
-## Introduction
-
-Perform an exploratory analysis of the data.
-All the series of plots generated with grid. have to be done in the console as to obtain bigger plots.
 
 ```{r}
 
-
 setwd("C:/Users/IgnacioGarcia/Desktop/UNIVERSIDAD/Statistics for data science/Master thesis/data")
-
 data = st_read('Mixed_model_data/base_data_raster')
+#data$X = NULL
 
 data = st_as_sf(data, sf_column_name = 'geometry')
 
 data_total = data
-
-data = data[
-            (data$admn0Nm == 'Mauritania' & data$admn1Nm %in% c('Hodh Ech Chargi', 'Hodh El Gharbi', 'Tagant', 'Assaba', 'Brakna',    'Gorgol', 'Guidimakha', 'Trarza', 'Nouakchott') ) |
-              (data$admn0Nm == 'Senegal' & data$admn1Nm %in% c('Saint Louis', 'Louga', 'Matam', 'Dakar', 'Thies', 'Diourbel') ) |
-              (data$admn0Nm == 'Mali' & data$admn1Nm %in% c( 'Tombouctou', 'Gao', 'Kayes', 'Koulikoro', 'Segou', 'Mopti') ) |
-              (data$admn0Nm == 'Niger' & data$admn1Nm %in% c('Agadez') == FALSE ) |
-              (data$admn0Nm == 'Chad' & data$admn1Nm %in% c('Zone 2','Zone 3','Zone 4','Zone 5') ) |
-              (data$admn0Nm == 'Nigeria' & data$admn1Nm %in% c('Sokoto', 'Zamfara','Katsina','Kano','Jigawa','Yobe','Borno') & (data$Wasted > 0 | is.na(data$Wasted))  ) |
-              (data$admn0Nm == 'Burkina Faso' & data$admn1Nm %in% c('Sahel', 'Nord', 'Centre-Nord') )
-            ,]
-
-
-data$Bmss_nm = (data$Bmss_nm)
 
 summary(data)
 
@@ -66,6 +47,9 @@ data_mrtly = data[!is.na(data$Mortlty) & !is.na(data$Bmss_nm) ,]
 #data = data[data$Wasted <= 30,]
 
 ```
+
+
+
 ## Exploratory analysis
 
 Densities
@@ -186,7 +170,7 @@ theme_set(theme_bw())
 
 ```
 
-Map of the Sahel
+Map of west Africa
 
 ```{r}
 
@@ -199,67 +183,14 @@ ggplot(data = world) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
     coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('The Sahel') + 
+    ggtitle('West Africa') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
-
-```
-
-Map of West Africa & Sahel
-
-```{r}
-# 
-# x2 <- aggregate(data_total, 
-#                by = list(data_total$admn0Nm,data_total$admn1Nm),
-#                FUN = mean,
-#                warn = FALSE)
-# 
-# 
-# x2 = st_as_sf(x2, sf_column_name = 'geometry')
-# x2 = st_collection_extract(
-#   x2,
-#   type = c("POLYGON"),
-#   warn = FALSE
-# )
-# 
-# x_total <- aggregate(data_total, 
-#                by = list(data_total$admn0Nm),
-#                FUN = mean,
-#                warn = FALSE)
-# 
-# 
-# x_total = st_as_sf(x_total, sf_column_name = 'geometry')
-# x_total = st_collection_extract(
-#   x_total,
-#   type = c("POLYGON"),
-#   warn = FALSE
-# )
-# 
-# world_points<- st_centroid(x2)
-# world_points <- cbind(x2, st_coordinates(st_centroid(x2$geometry)))
-# 
-# world_points_total<- st_centroid(x_total)
-# world_points_total <- cbind(x_total, st_coordinates(st_centroid(x_total$geometry)))
-# 
-# ggplot(data = world) +
-#     geom_sf(fill = "antiquewhite1") +
-#     geom_sf(data = x2, color = 'darkgray', fill = 'antiquewhite3') +
-#     geom_sf(data = x, color = 'gray', fill = 'antiquewhite2') +
-#     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-#     geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y =      c(2, -0.25, 1.5, 1.5, -0.5)) +
-#     scale_fill_viridis_c(alpha = .5) +
-#     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-#     coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
-#     xlab('Longitude') + ylab('Latitude') + 
-#     ggtitle('West Africa & The Sahel', subtitle = 'The sahel ') + 
-#     theme( panel.background = element_rect(fill = 'aliceblue'))
-
+    
 ```
 
 Wasting
 
 ```{r errors=FALSE}
-
-
 
 
 biomass_raster = raster(x, res = 1/100)
@@ -270,11 +201,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data = x, aes(fill = x$Wasted), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Wasting prevalence') + 
@@ -320,11 +251,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data = x, aes(fill = x$Stunted), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Stunting prevalence') + 
@@ -370,11 +301,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data = x, aes(fill = x$Mortlty), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean mortality under five prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Mortality prevalence') + 
@@ -405,7 +336,7 @@ plot(model.lineal)
 
 ```{r}
 
-model.lineal.2 = lm(log(Wasted) ~  Year + Area + Bmss_nm, data = data_wasted)
+model.lineal.2 = lm(log(Wasted+1) ~  Year + Area + Bmss_nm, data = data_wasted)
 summary(model.lineal.2)
 
 ```
@@ -452,11 +383,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean residuals of estimated acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
@@ -476,11 +407,11 @@ for(i in 1998:2018){
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =data_wasted[data_wasted$Year == i,], aes(fill = data_wasted[data_wasted$Year == i,]$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Wasting rate') + 
@@ -513,9 +444,7 @@ summary(model.mixed.1)
 
 ```{r}
 
-test12=-2*logLik(model.mixed.1, REML=T) +2*logLik(model.mixed.2, REML=T)
-mean(pchisq(test12,df=c(0,1),lower.tail=F))
-#anova(model.mixed.1,model.mixed.2)
+anova(model.mixed.1,model.mixed.2)
 
 ```
 
@@ -526,8 +455,6 @@ As we can see, independent intercepts for each country and region seem to perfor
 model.mixed.3 = lmer(Wasted ~ Year + Area + Bmss_nm + (Year  | admn0Nm) + (Year  | admn1Nm), data = data_wasted, REML = FALSE, na.action = na.omit)
 summary(model.mixed.3)
 anova(model.mixed.1,model.mixed.3)
-test13=-2*logLik(model.mixed.1, REML=T) +2*logLik(model.mixed.3, REML=T)
-mean(pchisq(test13,df=c(0,1),lower.tail=F))
 
 ```
 
@@ -540,9 +467,6 @@ model.mixed.4 = update(model.mixed.1, .~.+Year:Bmss_nm+Area:Bmss_nm)
 model.mixed.5 = update(model.mixed.2, .~.+Year:Bmss_nm+Area:Bmss_nm)
 
 anova(model.mixed.4,model.mixed.5)
-test45=-2*logLik(model.mixed.4, REML=T) +2*logLik(model.mixed.5, REML=T)
-mean(pchisq(test45,df=c(0,1),lower.tail=F))
-
 ```
 
 ```{r}
@@ -577,13 +501,13 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('Mean residuals of estimated acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    ggtitle('Mean residuals of estimated acute malnutrition prevalence in West Africa', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
 
@@ -725,19 +649,6 @@ summary(model.spam.2)
 
 
 ```{r}
-#testing bubble
-# data_wasted.2$Bmss_nm = data_wasted.2$Bmss_nm/10000
-# model.spam.3 = fitme(Wasted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon) + AR1(1| Year ), distMatrix = MLdistMat, data=data_wasted.2, method = 'ML')
-# 
-# summary(model.spam.3)
-
-test12=-2*logLik(model.spam, REML=T) +2*logLik(model.spam.2, REML=T)
-mean(pchisq(test12,df=c(0,1),lower.tail=F))
-
-```
-
-
-```{r}
 
 model.spam.2 = update(model.spam.2, method = 'REML')
 
@@ -759,11 +670,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean residuals of estimated acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
@@ -806,17 +717,12 @@ if (suppressPackageStartupMessages(require(maps,quietly=TRUE))) {
 ## 'maps' required for add.map=TRUE
 filled.mapMM(model.spam.2,add.map=TRUE,plot.axes=quote({axis(1);axis(2)}),
 decorations=quote(points(pred[,coordinates],pch=15,cex=0.3)),
-plot.title=title(main="Inferred prevalence of acute malnutrition, Sahel",
-xlab="longitude",ylab="latitude"), yrange = c(5,27))
+plot.title=title(main="Inferred prevalence of acute malnutrition, West Africa",
+xlab="longitude",ylab="latitude"), yrange = c(0,27), xrange = c(-20,30))
 }
 
 
 ```
-
-
-
-
-
 
 
 
@@ -890,11 +796,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
@@ -940,9 +846,9 @@ We start by testing random effects, then, the fixed effects.
 ```{r}
 
 #Random intercept with fixed mean
-model.mixed.1 =lmer(Stunted ~ Year + Area + Bmss_nm + (1|admn0Nm) + (1|admn1Nm), data = data_stunted, REML = FALSE)
+model.mixed.1 =lmer(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1|admn0Nm) + (1|admn1Nm), data = data_stunted, REML = FALSE)
 #Intercept varying among group 1 and group 2 within group 1
-model.mixed.2 = lmer(Stunted ~ Year + Area + Bmss_nm + (1|admn0Nm/admn0Nm), data = data_stunted, REML = FALSE)
+model.mixed.2 = lmer(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1|admn0Nm/admn0Nm), data = data_stunted, REML = FALSE)
 summary(model.mixed.1)
 summary(model.mixed.1)
 
@@ -959,7 +865,7 @@ As we can see, independent intercepts for each country and region seem to perfor
 
 ```{r}
 #Uncorrelated slope and intercept for the year and intercept varying among g1 and g2 withing g1.
-model.mixed.3 = lmer(Stunted ~ Year + Area + Bmss_nm + (Year  | admn0Nm) + (Year  | admn1Nm), data = data_stunted, REML = FALSE, na.action = na.omit)
+model.mixed.3 = lmer(sqrt(Stunted) ~ Year + Area + Bmss_nm + (Year  | admn0Nm) + (Year  | admn1Nm), data = data_stunted, REML = FALSE, na.action = na.omit)
 summary(model.mixed.3)
 anova(model.mixed.1,model.mixed.3)
 
@@ -1008,11 +914,11 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
     ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
@@ -1071,9 +977,9 @@ Variance does not seem to be constant:
 
 ```{r}
 
-plot(model.mixed.1 , Stunted ~ fitted(.) , abline = c(0,1))
-plot(model.mixed.1 , Stunted ~ fitted(.) | admn0Nm, abline = c(0,1))
-plot(model.mixed.1 , Stunted ~ fitted(.) | admn1Nm, abline = c(0,1))
+plot(model.mixed.1 , sqrt(Stunted) ~ fitted(.) , abline = c(0,1))
+plot(model.mixed.1 , sqrt(Stunted) ~ fitted(.) | admn0Nm, abline = c(0,1))
+plot(model.mixed.1 , sqrt(Stunted) ~ fitted(.) | admn1Nm, abline = c(0,1))
 
 ```
 
@@ -1095,7 +1001,7 @@ First the model without spatial components:
 
 ```{r}
 
-model.spam = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) ,data=data_stunted, method = 'ML')
+model.spam = fitme(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) ,data=data_stunted, method = 'ML')
 
 summary(model.spam)
 
@@ -1140,7 +1046,7 @@ MLdistMat <- as.matrix(proxy::dist(centroids))
 ```{r}
 data_stunted.2 = data_stunted
 data_stunted.2$geometry = NULL
-model.spam.2 = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
+model.spam.2 = fitme(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
 summary(model.spam.2)
 ```
 
@@ -1167,13 +1073,13 @@ ggplot(data = world) +
     geom_sf(fill = "antiquewhite1") +
     geom_sf(data =x, aes(fill = x$residuals), color = NA) +
     geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
-    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 4, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
     -0.25, 1.5, 1.5, -0.5)) +
     scale_fill_viridis_c(alpha = .5) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
-    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('Mean residuals of estimated chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    ggtitle('Mean residuals of estimated chronic malnutrition prevalence in West Africa', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
 
@@ -1203,7 +1109,7 @@ Variance does not seem to be constant:
 
 ```{r}
 
-plot(model.spam.2$eta, data_stunted$Stunted)
+plot(model.spam.2$eta, sqrt(data_stunted$Stunted))
 abline(a = 0,b = 1)
 
 ```
@@ -1214,14 +1120,25 @@ if (suppressPackageStartupMessages(require(maps,quietly=TRUE))) {
 ## 'maps' required for add.map=TRUE
 filled.mapMM(model.spam.2,add.map=TRUE,plot.axes=quote({axis(1);axis(2)}),
 decorations=quote(points(pred[,coordinates],pch=15,cex=0.3)),
-plot.title=title(main="Inferred prevalence of chronic malnutrition, Sahel",
-xlab="longitude",ylab="latitude"), yrange = c(5,27))
+plot.title=title(main="Inferred prevalence of chronic malnutrition, West Africa",
+xlab="longitude",ylab="latitude"), yrange = c(0,27), xrange = c(-20,30))
 }
 
 
 ```
 
+```{r}
 
+filled.mapMM(model.spam.2, nlevels=10, add.map=TRUE, plot.axes=quote({axis(1);axis(2)}),
+             variance="respVar",
+             plot.title=title(main="Inferred migration propensity of blackcaps",
+                               xlab="longitude",ylab="latitude"))
 
+spamm.1 =  fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
+spamm.2 =  fitme(Stunted ~ Year + Area + Bmss_nm + Area:Bmss_nm + Bmss_nm:Year + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
+
+confint(spamm.1, 'Bmss_nm')
+
+```
 
 
