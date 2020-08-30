@@ -66,18 +66,18 @@ plot(density(na.omit(data$Bmss_nm)), xlab = 'Biomass anomaly', main = 'Density o
 
 ```{r}
 
-par(mfrow=c(1,3))
+par(mfrow=c(1,2))
 
 plot(density(na.omit(data$Wasted)), xlab = 'Wasting prevalence', main = 'Density of wasting prevalence')
 plot(density(na.omit(data$Stunted)), xlab = 'Stunting prevalence', main = 'Density of stunting prevalence')
-plot(density(na.omit(data$Mortlty)), xlab = 'Mortality under 5 prevalence', main = 'Density of mortality under 5 prevalence')
+#plot(density(na.omit(data$Mortlty)), xlab = 'Mortality under 5 prevalence', main = 'Density of mortality under 5 prevalence')
 
 ```
 
 
 ```{r}
 
-ggplot(data) + aes( y = (Bmss_nm), col = admn0Nm) + geom_boxplot() + theme_classic()
+ggplot(data) + aes( y = (Bmss_nm), col = admn0Nm) + geom_boxplot() + ylab('Biomass anomaly') + theme_classic()
 
 ```
 
@@ -100,18 +100,23 @@ grid_arrange_shared_legend <- function(...) {
 
 
 
-plot_mort = ggplot(na.omit(data)) + aes(x = admn0Nm, y = Mortlty, col = admn0Nm) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
+#plot_mort = ggplot(na.omit(data)) + aes(x = admn0Nm, y = Mortlty, col = admn0Nm) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
 plot_wasted = ggplot(na.omit(data)) + aes(x = admn0Nm, y = Wasted, col = admn0Nm) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
 plot_stunted = ggplot(na.omit(data)) + aes(x = admn0Nm, y = Stunted, col = admn0Nm) + geom_boxplot() + labs(x = '', fill = 'Country') + theme_classic()
 
 
-grid_arrange_shared_legend(plot_mort,plot_wasted,plot_stunted, ncol=2, top = textGrob("Mortality, stunting and wasting prevalences per country",gp=gpar(fontsize=20)))
+grid_arrange_shared_legend(plot_wasted,plot_stunted, ncol=2, top = textGrob("Stunting and wasting prevalences per country",gp=gpar(fontsize=20)))
 ```
 
 ```{r}
 
-ggplot(data = data_wasted) + aes(x = Year, y = Wasted, col = admn0Nm) + geom_smooth(size = 1, alpha = 0.2) + geom_point(alpha = 0.5) + ylab('Wasting prevalence') + 
-  labs(fill = 'Country name')
+wasting_plot = ggplot(data = data_wasted) + aes(x = Year, y = Wasted, col = admn0Nm) + geom_smooth(size = 1, alpha = 0.2) + ylab('Wasting prevalence') + 
+  labs(fill = 'Country name') + theme_classic()
+
+stunting_plot = ggplot(data = data_wasted) + aes(x = Year, y = Stunted, col = admn0Nm) + geom_smooth(size = 1, alpha = 0.2) + ylab('Stunting prevalence') + 
+  labs(fill = 'Country name') + theme_classic()
+
+grid_arrange_shared_legend(wasting_plot,stunting_plot, ncol=2, top = textGrob("Stunting and wasting prevalences over time",gp=gpar(fontsize=20)))
 
 ```
 
@@ -119,7 +124,9 @@ ggplot(data = data_wasted) + aes(x = Year, y = Wasted, col = admn0Nm) + geom_smo
 ```{r}
 #Corrplot
 library(corrplot)
-cor1 = cor(na.omit(as.numeric(data[,4:9])))
+data_cor = data
+data_cor$geometry = NULL
+cor1 = cor(na.omit((data_cor[,c(4:6,8:10)])))
 corrplot.mixed(cor1, lower.col = 'black', number.cex = .7)
 
 ```
@@ -207,7 +214,7 @@ ggplot(data = world) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
     coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('Mean acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    ggtitle('Mean acute malnutrition prevalence in West Africa', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Wasting prevalence') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
 ```
@@ -257,7 +264,7 @@ ggplot(data = world) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
     coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('Mean chronic malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    ggtitle('Mean chronic malnutrition prevalence in West Africa', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Stunting prevalence') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
 ```
@@ -676,13 +683,21 @@ ggplot(data = world) +
     geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
     coord_sf(xlim =c(30, -20), ylim = c(0, 28), expand = FALSE) + 
     xlab('Longitude') + ylab('Latitude') + 
-    ggtitle('Mean residuals of estimated acute malnutrition prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    ggtitle('Mean residuals of estimated acute malnutrition prevalence in West Africa', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Estimated residuals') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
 
 
 
 ```
+
+```{r}
+
+test12=-2*logLik(model.spam, REML=T) +2*logLik(model.spam.2, REML=T)
+mean(pchisq(test12,df=c(0,1),lower.tail=F))
+
+```
+
 
 ```{r}
 
@@ -1001,7 +1016,7 @@ First the model without spatial components:
 
 ```{r}
 
-model.spam = fitme(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) ,data=data_stunted, method = 'ML')
+model.spam = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) ,data=data_stunted, method = 'ML')
 
 summary(model.spam)
 
@@ -1046,7 +1061,7 @@ MLdistMat <- as.matrix(proxy::dist(centroids))
 ```{r}
 data_stunted.2 = data_stunted
 data_stunted.2$geometry = NULL
-model.spam.2 = fitme(sqrt(Stunted) ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
+model.spam.2 = fitme(Stunted ~ Year + Area + Bmss_nm + (1 | admn0Nm) + (1 | admn1Nm) +  Matern( 1 | lat + lon), distMatrix = MLdistMat, data=data_stunted.2, method = 'ML')
 summary(model.spam.2)
 ```
 
