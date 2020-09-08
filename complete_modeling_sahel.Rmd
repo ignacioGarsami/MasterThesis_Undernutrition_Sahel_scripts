@@ -74,9 +74,9 @@ Densities
 
 par(mfrow=c(1,3))
 
-plot(density(na.omit(data$Area)), xlab = 'Area', main = 'Density of Area')
-plot(density(na.omit(data$Biomass)), xlab = 'Biomass', main = 'Density of Biomass')
-plot(density(na.omit(data$Bmss_nm)), xlab = 'Biomass anomaly', main = 'Density of Biomass anomaly')
+hist(na.omit(data$Area), xlab = 'Area', main = 'Density of Area')
+hist(na.omit(data$Biomass), xlab = 'Biomass', main = 'Density of Biomass')
+hist(na.omit(data$Bmss_nm), xlab = 'Biomass anomaly', main = 'Density of Biomass anomaly')
 
 ```
 
@@ -84,8 +84,8 @@ plot(density(na.omit(data$Bmss_nm)), xlab = 'Biomass anomaly', main = 'Density o
 
 par(mfrow=c(1,2))
 
-plot(density(na.omit(data$Wasted)), xlab = 'Wasting prevalence', main = 'Density of wasting prevalence')
-plot(density(na.omit(data$Stunted)), xlab = 'Stunting prevalence', main = 'Density of stunting prevalence')
+hist(na.omit(data$Wasted), xlab = 'Wasting prevalence', main = 'Density of wasting prevalence')
+hist(na.omit(data$Stunted), xlab = 'Stunting prevalence', main = 'Density of stunting prevalence')
 #plot(density(na.omit(data$Mortlty)), xlab = 'Mortality under 5 prevalence', main = 'Density of mortality under 5 prevalence')
 
 ```
@@ -126,13 +126,37 @@ grid_arrange_shared_legend(plot_wasted,plot_stunted, ncol=2, top = textGrob("Stu
 
 ```{r}
 
-wasting_plot = ggplot(data = data_wasted) + aes(x = Year, y = Wasted, col = admn0Nm) + geom_smooth(size = 1, alpha = 0.2) +  ylab('Wasting prevalence') + 
-  labs(fill = 'Country name') + theme_classic()
+x <- aggregate(data_wasted, 
+               by = list(data_wasted$admn0Nm,data_wasted$Year),
+               FUN = mean,
+               warn = FALSE)
 
-stunting_plot = ggplot(data = data_wasted) + aes(x = Year, y = Stunted, col = admn0Nm) + geom_smooth(size = 1, alpha = 0.2) + ylab('Stunting prevalence') + 
-  labs(fill = 'Country name') + theme_classic()
 
-grid_arrange_shared_legend(wasting_plot,stunting_plot, ncol=2, top = textGrob("Stunting and wasting prevalences over time",gp=gpar(fontsize=20)))
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+wasting_plot = ggplot(data = x) + aes(x = Year, y = Wasted, col = Group.1) + geom_line(size = 1) + geom_point() +  ylab('Wasting prevalence') + labs(fill = 'Country name') + theme_classic()
+
+x <- aggregate(data_stunted, 
+               by = list(data_stunted$admn0Nm,data_stunted$Year),
+               FUN = mean,
+               warn = FALSE)
+
+
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+stunting_plot = ggplot(data = x) + aes(x = Year, y = Stunted, col = Group.1)  + geom_line(size = 1) + geom_point()  + ylab('Stunting prevalence')+ labs(fill = 'Country name') + theme_classic()
+
+grid_arrange_shared_legend(wasting_plot,stunting_plot, ncol=1, top = textGrob("Stunting and wasting prevalences over time",gp=gpar(fontsize=20)))
 
 ```
 
@@ -385,6 +409,55 @@ ggplot(data = world) +
     ggtitle('Mean mortality under five prevalence in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
     labs(fill = 'Mortality prevalence') + 
     theme( panel.background = element_rect(fill = 'aliceblue'))
+```
+
+
+Biomass
+
+```{r}
+
+x <- aggregate(data, 
+               by = list(data$admn0Nm,data$admn1Nm),
+               FUN = mean,
+               warn = FALSE)
+
+
+x = st_as_sf(x, sf_column_name = 'geometry')
+x = st_collection_extract(
+  x,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+x_total <- aggregate(data, 
+               by = list(data$admn0Nm),
+               FUN = mean,
+               warn = FALSE)
+
+
+x_total = st_as_sf(x_total, sf_column_name = 'geometry')
+x_total = st_collection_extract(
+  x_total,
+  type = c("POLYGON"),
+  warn = FALSE
+)
+
+
+ggplot(data = world) +
+    geom_sf(fill = "antiquewhite1") +
+    geom_sf(data = x, aes(fill = x$Bmss_nm), color = NA) +
+    geom_sf(data = world, fill = NA, size = 0.6, color = 'black') +
+    geom_label_repel(data = world_points_total, aes(X, Y, label = Group.1), size = 3, fontface = "bold", alpha = 0.6, nudge_x = c(3, -2, 3, 2, -1), nudge_y = c(2, 
+    -0.25, 1.5, 1.5, -0.5)) +
+    scale_fill_viridis_c(alpha = .5) +
+    geom_text_repel(data= world_points,aes(x=X, y=Y, label=Group.2), color = 'black', fontface = 'bold', check_overlap = TRUE,size = 3) +
+    coord_sf(xlim =c(25, -20), ylim = c(5, 28), expand = FALSE) + 
+    xlab('Longitude') + ylab('Latitude') + 
+    ggtitle('Mean biomass anomaly in the Sahel', subtitle = 'From 1998 to 2018, by region') + 
+    labs(fill = 'Biomass anomaly') + 
+    theme( panel.background = element_rect(fill = 'aliceblue'))
+
+
 ```
 
 ## Modeling Wasting
